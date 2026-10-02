@@ -107,6 +107,6 @@ class UpdateIntegrationTest {
         compose.onAllNodes(isToggleable()).onFirst().assertIsOn()
         compose.onAllNodes(isToggleable())[1].assertIsOff()
         val screenshot = File(context.getExternalFilesDir(null), "screenshots/update-settings.png").apply { parentFile!!.mkdirs() }
-        screenshot.outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+        screenshot.outputStream().use { compose.onNode(isDialog()).captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }
