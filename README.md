@@ -9,7 +9,8 @@ Kişisel Android manga ve manhwa okuyucusu. MangaDex, yerel CBZ/ZIP dosyaları v
 ## Kullanım
 
 - **Kaynaklar:** MangaDex'te ara, bölüm dilini seç, seriyi kütüphaneye ekle.
-- **Kütüphane:** Serileri ara, okuma durumunu seç, kaldığın yerden devam et.
+- **Kütüphane:** Serileri ara, okuma durumunu seç. Son okuduğun seri kütüphanede olmasa da ana ekrandaki **Devam et** düğmesiyle bölüm ve sayfa konumuna dön.
+- **Arama:** Seri detayından geri dönünce arama metni, dil, sonuçlar ve kaydırma konumu korunur.
 - **Okuyucu:** Yukarıdan aşağıya kaydır. Çift dokun veya iki parmağınla yakınlaştır. Tek dokun kontrolleri gizler/açar.
 - **İndirilenler:** Bölüm listesinden indirme başlat. Tamamlanan bölümleri internetsiz oku.
 - **+ düğmesi:** Görsel içeren CBZ/ZIP dosyası içe aktar. Dosya adları doğal sırayla okunur (1, 2, 10).

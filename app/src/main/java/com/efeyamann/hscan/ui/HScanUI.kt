@@ -18,6 +18,8 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,7 +38,6 @@ import com.efeyamann.hscan.AppModel
 import com.efeyamann.hscan.BuildConfig
 import com.efeyamann.hscan.data.*
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import java.io.File
 
 private val ReaderColors = darkColorScheme(
@@ -49,6 +50,7 @@ private val ReaderColors = darkColorScheme(
 @Composable
 fun HScanUI(model: AppModel = viewModel()) {
     MaterialTheme(colorScheme = ReaderColors) {
+        val screenStates = rememberSaveableStateHolder()
         val repo = model.repository
         var tab by rememberSaveable { mutableIntStateOf(0) }
         var mangaId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -68,6 +70,7 @@ fun HScanUI(model: AppModel = viewModel()) {
             if (uri != null) model.action { repo.restoreBackup(uri); model.notice("Yedek geri yüklendi.") }
         }
         val library by remember { repo.dao.library() }.collectAsStateWithLifecycle(emptyList())
+        val latestRead by remember { repo.dao.latestRead() }.collectAsStateWithLifecycle(null)
         val downloads by remember { repo.dao.downloads() }.collectAsStateWithLifecycle(emptyList())
         val openManga: (Manga) -> Unit = { m -> model.open(m) { mangaId = m.id } }
         val selectedChapter = chapterId
@@ -101,11 +104,13 @@ fun HScanUI(model: AppModel = viewModel()) {
                         Text("Arşiv içe aktarılıyor…", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
                     }
                     val selected = mangaId
-                    if (selected != null) DetailScreen(selected, model, onRead = { chapterId = it })
-                    else when (tab) {
-                        0 -> LibraryScreen(library, onOpen = openManga, onContinue = { chapterId = it }, onDiscover = { tab = 1 }, onImport = { archivePicker.launch(arrayOf("*/*")) })
-                        1 -> SourceScreen(model, onOpen = openManga)
-                        2 -> DownloadsScreen(downloads, library, model, onRead = { chapterId = it })
+                    screenStates.SaveableStateProvider(selected?.let { "detail:$it" } ?: "tab:$tab") {
+                        if (selected != null) DetailScreen(selected, model, onRead = { chapterId = it })
+                        else when (tab) {
+                            0 -> LibraryScreen(library, latestRead, repo, onOpen = openManga, onContinue = { chapterId = it }, onDiscover = { tab = 1 }, onImport = { archivePicker.launch(arrayOf("*/*")) })
+                            1 -> SourceScreen(model, onOpen = openManga)
+                            2 -> DownloadsScreen(downloads, library, model, onRead = { chapterId = it })
+                        }
                     }
                 }
             }
@@ -132,35 +137,39 @@ fun HScanUI(model: AppModel = viewModel()) {
 }
 
 @Composable
-private fun LibraryScreen(library: List<Manga>, onOpen: (Manga) -> Unit, onContinue: (String) -> Unit, onDiscover: () -> Unit, onImport: () -> Unit) {
+private fun ContinueCard(manga: Manga, repo: ReaderRepository, onContinue: (String) -> Unit) {
+    val chapter by remember(manga.lastChapterId) { repo.dao.observeChapter(manga.lastChapterId) }.collectAsStateWithLifecycle(null)
+    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Kaldığın yerden", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(manga.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            chapter?.let { Text("${it.title} · Sayfa ${it.progressIndex + 1}", style = MaterialTheme.typography.bodySmall) }
+            Button(onClick = { onContinue(manga.lastChapterId) }, modifier = Modifier.fillMaxWidth()) { Text("Devam et") }
+        }
+    }
+}
+
+@Composable
+private fun LibraryScreen(library: List<Manga>, latest: Manga?, repo: ReaderRepository, onOpen: (Manga) -> Unit, onContinue: (String) -> Unit, onDiscover: () -> Unit, onImport: () -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var status by rememberSaveable { mutableStateOf("Tümü") }
-    if (library.isEmpty()) {
-        EmptyState(Icons.AutoMirrored.Outlined.MenuBook, "İlk serini ekle", "MangaDex'ten bir seri bul veya telefondan CBZ/ZIP dosyası aç.") {
-            Button(onClick = onDiscover) { Text("MangaDex'e göz at") }
-            OutlinedButton(onClick = onImport) { Text("Dosya içe aktar") }
-        }
-        return
-    }
-    Column {
-        SearchField(query, { query = it }, "Kütüphanede ara")
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Tümü", "Okuyorum", "Sonra", "Tamamlandı").forEach { item -> FilterChip(selected = status == item, onClick = { status = item }, label = { Text(item) }) }
-        }
-        val filtered = library.filter { (status == "Tümü" || it.readingStatus == status) && it.title.contains(query, ignoreCase = true) }
-        val latest = library.firstOrNull { it.lastChapterId.isNotEmpty() }
-        if (latest != null && query.isBlank() && status == "Tümü") {
-            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Kaldığın yerden", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        Text(latest.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    TextButton(onClick = { onContinue(latest.lastChapterId) }) { Text("Devam et") }
+    Column(Modifier.fillMaxSize()) {
+        if (latest != null && query.isBlank() && status == "Tümü") ContinueCard(latest, repo, onContinue)
+        if (library.isEmpty()) {
+            Box(Modifier.weight(1f)) {
+                EmptyState(Icons.AutoMirrored.Outlined.MenuBook, "İlk serini ekle", "MangaDex'ten bir seri bul veya telefondan CBZ/ZIP dosyası aç.") {
+                    Button(onClick = onDiscover) { Text("MangaDex'e göz at") }
+                    OutlinedButton(onClick = onImport) { Text("Dosya içe aktar") }
                 }
             }
+        } else {
+            SearchField(query, { query = it }, "Kütüphanede ara")
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Tümü", "Okuyorum", "Sonra", "Tamamlandı").forEach { item -> FilterChip(selected = status == item, onClick = { status = item }, label = { Text(item) }) }
+            }
+            val filtered = library.filter { (status == "Tümü" || it.readingStatus == status) && it.title.contains(query, ignoreCase = true) }
+            MangaGrid(filtered, onOpen, Modifier.weight(1f))
         }
-        MangaGrid(filtered, onOpen, Modifier.weight(1f))
     }
 }
 
@@ -169,25 +178,18 @@ private fun SourceScreen(model: AppModel, onOpen: (Manga) -> Unit) {
     val repo = model.repository
     var query by rememberSaveable { mutableStateOf("") }
     var language by rememberSaveable { mutableStateOf(repo.preferences.getString("language", "en") ?: "en") }
-    var mangas by remember { mutableStateOf<List<Manga>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var retry by remember { mutableIntStateOf(0) }
-    LaunchedEffect(query, language, retry) {
-        loading = true; error = null
-        delay(400)
-        try { mangas = repo.api.search(query, language) }
-        catch (cancel: CancellationException) { throw cancel }
-        catch (e: Exception) { error = e.message ?: "Kaynak yüklenemedi." }
-        finally { loading = false }
-    }
+    val mangas = model.sourceMangas
+    val loading = model.sourceLoading
+    val error = model.sourceError
+    val grid = rememberLazyGridState()
+    LaunchedEffect(query, language) { model.searchSource(query, language) }
     Column {
         SearchField(query, { query = it }, "MangaDex'te seri ara")
         LanguageRow(language, { language = it; repo.preferences.edit().putString("language", it).apply() })
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (error != null) ErrorState(error!!, onRetry = { retry++ })
+        if (error != null) ErrorState(error, onRetry = { model.searchSource(query, language, force = true) })
         else if (!loading && mangas.isEmpty()) EmptyState(Icons.Outlined.Search, "Seri bulunamadı", "Aramayı veya bölüm dilini değiştir.") {}
-        else MangaGrid(mangas, onOpen, Modifier.weight(1f))
+        else MangaGrid(mangas, onOpen, Modifier.weight(1f).testTag("source-grid"), grid)
     }
 }
 
@@ -302,8 +304,8 @@ private fun downloadLabel(c: Chapter): String = when (c.downloadState) {
 }
 
 @Composable
-private fun MangaGrid(mangas: List<Manga>, onOpen: (Manga) -> Unit, modifier: Modifier = Modifier) {
-    LazyVerticalGrid(columns = GridCells.Adaptive(140.dp), modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+private fun MangaGrid(mangas: List<Manga>, onOpen: (Manga) -> Unit, modifier: Modifier = Modifier, state: LazyGridState = rememberLazyGridState()) {
+    LazyVerticalGrid(state = state, columns = GridCells.Adaptive(140.dp), modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         items(mangas, key = { it.id }) { manga ->
             Column(Modifier.clickable { onOpen(manga) }) {
                 Cover(manga, Modifier.fillMaxWidth().aspectRatio(2f / 3f))

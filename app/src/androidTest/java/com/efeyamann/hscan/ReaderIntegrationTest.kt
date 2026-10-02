@@ -10,6 +10,9 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
+import androidx.compose.ui.semantics.SemanticsProperties
 import com.efeyamann.hscan.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -145,6 +148,58 @@ class ReaderIntegrationTest {
         assertEquals(pages.size, offlinePages.size)
         assertTrue(offlinePages.all { !it.uri.startsWith("https://") && File(it.uri).isFile })
         assertTrue(repo.pageFile(downloaded, 0, offlinePages.first()).width > 0)
+    }
+
+    @Test fun continueWithoutLibraryEntryAfterRecreation() {
+        val repository = repo
+        val manga = runBlocking(Dispatchers.IO) { repository.importArchive(Uri.fromFile(archive())) }
+        val chapter = runBlocking(Dispatchers.IO) { repository.dao.chaptersOnce(manga.id).single() }
+        compose.waitUntil(15000) { compose.onAllNodesWithText(manga.title).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(manga.title).performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("Okumaya başla").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Okumaya başla").performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("image-0-0-ready").fetchSemanticsNodes().isNotEmpty() }
+        runBlocking(Dispatchers.IO) { repository.dao.setLibrary(manga.id, false) }
+        compose.onNodeWithTag("reader-list").performScrollToIndex(1)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        compose.waitUntil(15000) { runBlocking(Dispatchers.IO) { repository.dao.chapter(chapter.id)?.progressIndex == 1 } }
+        assertFalse(runBlocking(Dispatchers.IO) { repository.dao.manga(manga.id)!!.inLibrary })
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.onNodeWithContentDescription("Bölüm listesine dön").performClick()
+        compose.onNodeWithContentDescription("Geri").performClick()
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("Devam et").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Kaldığın yerden").assertIsDisplayed()
+        compose.onNodeWithText("Devam et").performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("image-1-0-ready").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("reader-part-1-0").assertIsDisplayed()
+        screenshot("continue-without-library.png")
+    }
+
+    @Test fun sourceBackPreservesQueryResultsAndScroll() {
+        lateinit var model: AppModel
+        compose.runOnIdle { model = ViewModelProvider(compose.activity)[AppModel::class.java] }
+        compose.onNodeWithText("Kaynaklar").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("Hunter")
+        compose.waitUntil(30000) { !model.sourceLoading && model.sourceMangas.size > 4 }
+        val results = model.sourceMangas
+        val index = minOf(8, results.lastIndex)
+        compose.onNodeWithTag("source-grid").performScrollToIndex(index)
+        val scroll = compose.onNodeWithTag("source-grid").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val selected = results[index]
+        compose.onAllNodesWithText(selected.title).onFirst().performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithContentDescription("Geri").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Geri").performClick()
+        compose.onNode(hasSetTextAction()).assertTextContains("Hunter")
+        compose.onNodeWithTag("source-grid").assertExists()
+        compose.onAllNodesWithText(selected.title).onFirst().assertIsDisplayed()
+        assertSame("Returning must reuse the loaded results", results, model.sourceMangas)
+        val restored = compose.onNodeWithTag("source-grid").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(scroll, restored, 0.01f)
+        compose.activityRule.scenario.recreate()
+        compose.onNode(hasSetTextAction()).assertTextContains("Hunter")
+        assertSame(results, model.sourceMangas)
+        screenshot("search-back-restored.png")
     }
 
     private fun screenshot(name: String) {

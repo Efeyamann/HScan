@@ -53,6 +53,8 @@ fun pagesFromJson(json: String): List<Page> {
 interface ReaderDao {
     @Query("SELECT * FROM manga WHERE inLibrary = 1 ORDER BY lastReadAt DESC, addedAt DESC")
     fun library(): Flow<List<Manga>>
+    @Query("SELECT * FROM manga WHERE lastChapterId != '' AND EXISTS (SELECT 1 FROM chapter WHERE chapter.id = manga.lastChapterId) ORDER BY lastReadAt DESC LIMIT 1")
+    fun latestRead(): Flow<Manga?>
     @Query("SELECT * FROM manga WHERE id = :id") fun observeManga(id: String): Flow<Manga?>
     @Query("SELECT * FROM manga WHERE id = :id") suspend fun manga(id: String): Manga?
     @Query("SELECT * FROM manga") suspend fun allManga(): List<Manga>

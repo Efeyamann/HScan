@@ -34,7 +34,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.efeyamann.hscan.data.*
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.sample
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
@@ -121,17 +124,23 @@ private fun ChapterReader(id: String, repo: ReaderRepository, gap: Boolean, onBa
     LaunchedEffect(restored, id) {
         if (!restored) return@LaunchedEffect
         snapshotFlow { Triple(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset, !list.canScrollForward) }
-            .distinctUntilChanged().debounce(300).collect { (index, offset, atEnd) ->
+            .distinctUntilChanged().sample(300).collect { (index, offset, atEnd) ->
                 save(index, offset, atEnd)
             }
     }
     val currentChapter by rememberUpdatedState(initialChapter)
     val currentPages by rememberUpdatedState(pages)
     val isRestored by rememberUpdatedState(restored)
-    DisposableEffect(id) {
-        onDispose {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(id, lifecycle) {
+        fun flush() {
             if (isRestored && currentPages.isNotEmpty() && currentChapter != null) save(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset, !list.canScrollForward)
         }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) flush()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); flush() }
     }
     Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { viewportWidth = it.width.toFloat() }) {
         when {
