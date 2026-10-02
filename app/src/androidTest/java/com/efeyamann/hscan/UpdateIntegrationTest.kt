@@ -1,6 +1,11 @@
 package com.efeyamann.hscan
 
 import android.content.Intent
+import android.Manifest
+import android.app.NotificationManager
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.test.rule.GrantPermissionRule
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.content.FileProvider
@@ -23,6 +28,7 @@ import java.security.MessageDigest
 
 @RunWith(AndroidJUnit4::class)
 class UpdateIntegrationTest {
+    @get:Rule val notificationPermission = GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private val context get() = compose.activity.applicationContext
 
@@ -70,6 +76,8 @@ class UpdateIntegrationTest {
             manager.download(release.version) { false }
             assertTrue(manager.state.value.ready)
             assertEquals(100, manager.state.value.percent)
+            val notifications = context.getSystemService(NotificationManager::class.java).activeNotifications
+            assertEquals("HScan güncellemesi hazır", notifications.single { it.id == 701 }.notification.extras.getString("android.title"))
             val intent = manager.installIntent()
             assertEquals(Intent.ACTION_VIEW, intent.action)
             assertEquals("application/vnd.android.package-archive", intent.type)
@@ -81,7 +89,10 @@ class UpdateIntegrationTest {
             val upgraded = UpdateManager(context, BuildConfig.VERSION_CODE, client, "updates-test")
             assertNull(upgraded.state.value.release)
             assertFalse(File(context.filesDir, "updates/hscan-${release.version}.apk").exists())
-        } finally { prefs.edit().clear().commit() }
+        } finally {
+            prefs.edit().clear().commit()
+            context.getSystemService(NotificationManager::class.java).cancel(701)
+        }
     }
 
     @Test fun updateSettingsDefaultToAutomaticDownloadOnMobileData() {
@@ -95,5 +106,7 @@ class UpdateIntegrationTest {
         assertFalse(manager.wifiOnly)
         compose.onAllNodes(isToggleable()).onFirst().assertIsOn()
         compose.onAllNodes(isToggleable())[1].assertIsOff()
+        val screenshot = File(context.getExternalFilesDir(null), "screenshots/update-settings.png").apply { parentFile!!.mkdirs() }
+        screenshot.outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }
