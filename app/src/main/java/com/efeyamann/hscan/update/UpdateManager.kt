@@ -179,7 +179,8 @@ class UpdateManager(
             }
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
             Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).setClipData(android.content.ClipData.newRawUri("HScan güncellemesi", uri))
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .apply { clipData = android.content.ClipData.newRawUri("HScan güncellemesi", uri) }
         }
     }
     fun notificationsEnabled() = NotificationManagerCompat.from(context).areNotificationsEnabled()
