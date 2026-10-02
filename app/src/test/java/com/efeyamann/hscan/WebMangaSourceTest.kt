@@ -22,7 +22,7 @@ class WebMangaSourceTest {
     }
     @Test fun buddyHashedUrlsAndLazyCoversSurviveSearch() {
         val card = buddy.parseSearch("""<div id="comics-container"><div class="comic-item">
-            <a href="/series/hero.Ab_C"><img data-src="https://images.example/hero.webp" src="/placeholder.png"></a>
+            <a href="/series/hero.Ab_C"><img data-src="https://images.example/hero.webp" src="/placeholder.png"><span>18+ Show</span></a>
             <a href="/series/hero.Ab_C">Hero</a><a href="/series/hero.Ab_C/chapter-2">Chapter 2</a></div></div>""").single()
         assertEquals("https://images.example/hero.webp", card.cover)
         assertEquals("https://mangabuddy1.co.uk/series/hero.Ab_C", card.sourceUrl)

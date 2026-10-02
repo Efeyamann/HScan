@@ -49,7 +49,7 @@ class WebMangaSource(val source: String, private val client: OkHttpClient) {
         val doc = Jsoup.parse(html, url)
         val cards = doc.select(if (source == "mangabats") ".panel_story_list .story_item, #contentstory .itemupdate" else "#comics-container .comic-item")
         return cards.mapNotNull { card ->
-            val link = card.select("a[href]").firstOrNull { validUrl(it.absUrl("href")) && it.text().isNotBlank() } ?: return@mapNotNull null
+            val link = card.select("a[href]").firstOrNull { validUrl(it.absUrl("href")) && it.selectFirst("img") == null && it.text().isNotBlank() } ?: return@mapNotNull null
             val target = link.absUrl("href").substringBefore('?').trimEnd('/')
             val image = card.selectFirst("img")
             val cover = image?.let { it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src") }.orEmpty()
