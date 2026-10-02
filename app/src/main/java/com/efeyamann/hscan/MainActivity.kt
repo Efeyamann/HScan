@@ -59,7 +59,24 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         sourceJob = viewModelScope.launch {
             try {
                 kotlinx.coroutines.delay(400)
-                sourceMangas = repository.api.search(query, language)
+                kotlinx.coroutines.supervisorScope {
+                    val results = linkedMapOf<String, List<Manga>>()
+                    val failures = linkedMapOf<String, String>()
+                    val sources = listOf("mangadex", "mangabats", "mangabuddy")
+                    sources.map { source -> launch {
+                        try {
+                            results[source] = if (source == "mangadex") repository.api.search(query, language)
+                                else repository.webSources.getValue(source).search(query)
+                        } catch (cancel: CancellationException) { throw cancel }
+                        catch (e: Exception) { failures[source] = com.efeyamann.hscan.data.sourceName(source) }
+                        if (sourceRequest == request) {
+                            sourceMangas = (0 until (results.values.maxOfOrNull { it.size } ?: 0)).flatMap { index ->
+                                sources.mapNotNull { results[it]?.getOrNull(index) }
+                            }
+                            sourceError = failures.values.takeIf { it.isNotEmpty() }?.joinToString(", ")?.let { "$it yüklenemedi. Diğer kaynakların sonuçları gösteriliyor." }
+                        }
+                    } }.forEach { it.join() }
+                }
             } catch (cancel: CancellationException) { throw cancel }
             catch (e: Exception) { sourceError = e.message ?: "Kaynak yüklenemedi." }
             finally { if (sourceRequest == request) sourceLoading = false }

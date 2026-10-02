@@ -32,6 +32,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
 import coil3.size.Scale
 import androidx.compose.ui.platform.LocalContext
 import com.efeyamann.hscan.AppModel
@@ -83,7 +85,7 @@ fun HScanUI(model: AppModel = viewModel()) {
                 snackbarHost = { SnackbarHost(snack) },
                 topBar = {
                     TopAppBar(
-                        title = { Text(if (mangaId != null) "Seri" else listOf("HScan", "MangaDex", "İndirilenler")[tab], fontWeight = FontWeight.SemiBold) },
+                        title = { Text(if (mangaId != null) "Seri" else listOf("HScan", "Seri ara", "İndirilenler")[tab], fontWeight = FontWeight.SemiBold) },
                         navigationIcon = { if (mangaId != null) IconButton(onClick = { mangaId = null }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Geri") } },
                         actions = {
                             IconButton(onClick = { archivePicker.launch(arrayOf("*/*")) }, enabled = !model.importing) { Icon(Icons.Outlined.Add, "CBZ veya ZIP içe aktar") }
@@ -132,7 +134,7 @@ fun HScanUI(model: AppModel = viewModel()) {
                     OutlinedButton(onClick = { settings = false; backupWriter.launch("hscan-yedek.json") }, modifier = Modifier.fillMaxWidth()) { Text("Yedek oluştur") }
                     OutlinedButton(onClick = { settings = false; backupReader.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth()) { Text("Yedeği geri yükle") }
                     TextButton(onClick = { settings = false; model.action { repo.clearPageCache(); model.notice("Geçici sayfalar temizlendi. İndirilenler korundu.") } }, modifier = Modifier.fillMaxWidth()) { Text("Geçici sayfaları temizle") }
-                    Text("HScan ${BuildConfig.VERSION_NAME} · ${BuildConfig.VERSION_CODE}\nMangaDex kaynaklı içerik · Türkçe arayüz", style = MaterialTheme.typography.bodySmall)
+                    Text("HScan ${BuildConfig.VERSION_NAME} · ${BuildConfig.VERSION_CODE}\nMangaDex · MangaBats · MangaBuddy · Türkçe arayüz", style = MaterialTheme.typography.bodySmall)
                 }
             },
             confirmButton = { TextButton(onClick = { settings = false }) { Text("Tamam") } },
@@ -161,8 +163,8 @@ private fun LibraryScreen(library: List<Manga>, latest: Manga?, repo: ReaderRepo
         if (latest != null && query.isBlank() && status == "Tümü") ContinueCard(latest, repo, onContinue)
         if (library.isEmpty()) {
             Box(Modifier.weight(1f)) {
-                EmptyState(Icons.AutoMirrored.Outlined.MenuBook, "İlk serini ekle", "MangaDex'ten bir seri bul veya telefondan CBZ/ZIP dosyası aç.") {
-                    Button(onClick = onDiscover) { Text("MangaDex'e göz at") }
+                EmptyState(Icons.AutoMirrored.Outlined.MenuBook, "İlk serini ekle", "Kaynaklardan bir seri bul veya telefondan CBZ/ZIP dosyası aç.") {
+                    Button(onClick = onDiscover) { Text("Kaynaklara göz at") }
                     OutlinedButton(onClick = onImport) { Text("Dosya içe aktar") }
                 }
             }
@@ -188,11 +190,15 @@ private fun SourceScreen(model: AppModel, onOpen: (Manga) -> Unit) {
     val grid = rememberLazyGridState()
     LaunchedEffect(query, language) { model.searchSource(query, language) }
     Column {
-        SearchField(query, { query = it }, "MangaDex'te seri ara")
+        SearchField(query, { query = it }, "Tüm kaynaklarda seri ara")
+        Text("MangaDex bölüm dili", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall)
         LanguageRow(language, { language = it; repo.preferences.edit().putString("language", it).apply() })
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (error != null) ErrorState(error, onRetry = { model.searchSource(query, language, force = true) })
-        else if (!loading && mangas.isEmpty()) EmptyState(Icons.Outlined.Search, "Seri bulunamadı", "Aramayı veya bölüm dilini değiştir.") {}
+        if (error != null) {
+            Text(error, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { model.searchSource(query, language, force = true) }) { Text("Tekrar dene") }
+        }
+        if (!loading && mangas.isEmpty() && error == null) EmptyState(Icons.Outlined.Search, "Seri bulunamadı", "Aramayı veya bölüm dilini değiştir.") {}
         else MangaGrid(mangas, onOpen, Modifier.weight(1f).testTag("source-grid"), grid)
     }
 }
@@ -217,14 +223,14 @@ private fun DetailScreen(id: String, model: AppModel, onRead: (String) -> Unit) 
         finally { loading = false }
     }
     val m = manga ?: return
-    val visible = chapters.filter { m.source == "local" || language == "all" || it.language == language }
+    val visible = chapters.filter { m.source != "mangadex" || language == "all" || it.language == language }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Cover(m, Modifier.width(96.dp).height(144.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(m.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(if (m.source == "local") "Yerel arşiv" else "MangaDex", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(com.efeyamann.hscan.data.sourceName(m.source), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     FilledTonalButton(onClick = { model.action { repo.dao.setLibrary(id, !m.inLibrary) } }) {
                         Icon(if (m.inLibrary) Icons.Outlined.BookmarkRemove else Icons.Outlined.BookmarkAdd, null)
                         Spacer(Modifier.width(8.dp)); Text(if (m.inLibrary) "Kütüphanede" else "Kütüphaneye ekle")
@@ -238,7 +244,7 @@ private fun DetailScreen(id: String, model: AppModel, onRead: (String) -> Unit) 
             if (m.inLibrary) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Okuyorum", "Sonra", "Tamamlandı").forEach { status -> FilterChip(selected = m.readingStatus == status, onClick = { model.action { repo.dao.setStatus(id, status) } }, label = { Text(status) }) }
             }
-            if (m.source != "local") LanguageRow(language, { language = it })
+            if (m.source == "mangadex") LanguageRow(language, { language = it })
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (error != null) Column(Modifier.padding(16.dp)) { Text(error!!, color = MaterialTheme.colorScheme.error); TextButton(onClick = { retry++ }) { Text("Tekrar dene") } }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -313,7 +319,8 @@ private fun MangaGrid(mangas: List<Manga>, onOpen: (Manga) -> Unit, modifier: Mo
         items(mangas, key = { it.id }) { manga ->
             Column(Modifier.clickable { onOpen(manga) }) {
                 Cover(manga, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
-                Text(manga.title, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(com.efeyamann.hscan.data.sourceName(manga.source), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text(manga.title, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (manga.inLibrary) Text(manga.readingStatus, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -325,7 +332,12 @@ private fun Cover(manga: Manga, modifier: Modifier) {
     Surface(modifier, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Box(contentAlignment = Alignment.Center) {
             Text(manga.title.take(1), style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            if (manga.cover.isNotBlank()) AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(if (manga.cover.startsWith("https://")) manga.cover else File(manga.cover)).size(512, 768).scale(Scale.FIT).build(), contentDescription = "${manga.title} kapağı", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            if (manga.cover.isNotBlank()) AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(if (manga.cover.startsWith("https://")) manga.cover else File(manga.cover)).httpHeaders(NetworkHeaders.Builder().apply {
+                when (manga.source) {
+                    "mangabats" -> set("Referer", "https://www.mangabats.com/")
+                    "mangabuddy" -> set("Referer", "https://mangabuddy1.co.uk/")
+                }
+            }.build()).size(512, 768).scale(Scale.FIT).build(), contentDescription = "${manga.title} kapağı", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
     }
 }

@@ -27,21 +27,27 @@ import java.util.zip.ZipFile
 class ReaderRepository(val context: Context, val database: ReaderDatabase) {
     val dao = database.dao()
     val api = MangaDex()
+    val webSources = listOf("mangabats", "mangabuddy").associateWith { WebMangaSource(it, api.client) }
+    suspend fun remotePages(chapter: Chapter): List<Page> {
+        val manga = dao.manga(chapter.mangaId) ?: throw IOException("Seri bulunamadı.")
+        return if (manga.source == "mangadex") api.pages(chapter.id)
+        else (webSources[manga.source] ?: throw IOException("Kaynak desteklenmiyor.")).pages(chapter)
+    }
     private val locks = ConcurrentHashMap<String, Mutex>()
     val preferences = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     suspend fun cacheManga(manga: Manga) {
         val old = dao.manga(manga.id)
-        dao.putManga(if (old == null) manga else old.copy(title = manga.title, description = manga.description, cover = manga.cover))
+        dao.putManga(if (old == null) manga else old.copy(title = manga.title, description = manga.description, cover = manga.cover, sourceUrl = manga.sourceUrl))
     }
     suspend fun refreshChapters(manga: Manga, language: String) {
         if (manga.source == "local") return
-        val fetched = api.chapters(manga.id, language)
+        val fetched = if (manga.source == "mangadex") api.chapters(manga.id, language) else (webSources[manga.source] ?: throw IOException("Kaynak desteklenmiyor.")).chapters(manga)
         database.withTransaction {
             fetched.forEach { fresh ->
                 val old = dao.chapter(fresh.id)
-                dao.putChapter(old?.copy(title = fresh.title, number = fresh.number, language = fresh.language, order = fresh.order, pageCount = fresh.pageCount) ?: fresh)
+                dao.putChapter(old?.copy(title = fresh.title, number = fresh.number, language = fresh.language, order = fresh.order, pageCount = fresh.pageCount, sourceUrl = fresh.sourceUrl) ?: fresh)
             }
         }
     }
@@ -53,9 +59,9 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
             if (chapter.language == "local") throw IOException("Yerel dosyalar bulunamadı. Aynı CBZ/ZIP dosyasını tekrar içe aktar.")
             dao.download(chapter.id, "error", 0, chapter.pageCount, "İndirilen dosyalar bulunamadı.")
         }
-        api.pages(chapter.id).mapIndexed { index, remote ->
+        remotePages(chapter).mapIndexed { index, remote ->
             val cached = File(directory(chapter.id, false), "%05d.img".format(index))
-            if (cached.isFile) runCatching { dimensions(cached).copy(uri = remote.uri) }.getOrDefault(remote) else remote
+            if (cached.isFile) runCatching { dimensions(cached).copy(uri = remote.uri, referer = remote.referer) }.getOrDefault(remote) else remote
         }
     }
 
@@ -81,7 +87,7 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
             }
             val part = File(dir, file.name + ".part")
             try {
-                api.client.newCall(Request.Builder().url(page.uri).header("User-Agent", "HScan/0.1").build()).execute().use { response ->
+                api.client.newCall(Request.Builder().url(page.uri).header("User-Agent", "Mozilla/5.0 (Android) HScan/0.1").apply { if (page.referer.isNotBlank()) header("Referer", page.referer) }.build()).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("Sayfa yüklenemedi (${response.code}). Tekrar dene.")
                     val body = response.body ?: throw IOException("Boş sayfa yanıtı.")
                     if (body.contentLength() > ArchiveRules.MAX_PAGE_BYTES) throw IOException("Görsel dosyası çok büyük.")
@@ -160,7 +166,7 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
 
     suspend fun performDownload(chapter: Chapter, stopped: () -> Boolean): Boolean {
         return locks.getOrPut("chapter-${chapter.id}") { Mutex() }.withLock {
-            val pages = api.pages(chapter.id)
+            val pages = remotePages(chapter)
             dao.download(chapter.id, "downloading", 0, pages.size)
             val saved = mutableListOf<Page>()
             for ((index, page) in pages.withIndex()) {
@@ -238,8 +244,8 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
         database.withTransaction {
             val library = dao.allManga().filter { it.inLibrary }
             val ids = library.map { it.id }.toSet()
-            library.forEach { m -> manga.put(JSONObject().put("id", m.id).put("title", m.title).put("description", m.description).put("cover", if (m.source == "local") "" else m.cover).put("source", m.source).put("status", m.readingStatus).put("lastChapter", m.lastChapterId).put("lastRead", m.lastReadAt)) }
-            dao.allChapters().filter { it.mangaId in ids }.forEach { c -> chapters.put(JSONObject().put("id", c.id).put("mangaId", c.mangaId).put("title", c.title).put("number", c.number).put("language", c.language).put("order", c.order).put("index", c.progressIndex).put("offset", c.progressOffset).put("read", c.isRead)) }
+            library.forEach { m -> manga.put(JSONObject().put("id", m.id).put("title", m.title).put("description", m.description).put("cover", if (m.source == "local") "" else m.cover).put("source", m.source).put("sourceUrl", m.sourceUrl).put("status", m.readingStatus).put("lastChapter", m.lastChapterId).put("lastRead", m.lastReadAt)) }
+            dao.allChapters().filter { it.mangaId in ids }.forEach { c -> chapters.put(JSONObject().put("id", c.id).put("mangaId", c.mangaId).put("title", c.title).put("number", c.number).put("language", c.language).put("sourceUrl", c.sourceUrl).put("order", c.order).put("index", c.progressIndex).put("offset", c.progressOffset).put("read", c.isRead)) }
         }
         root.put("manga", manga).put("chapters", chapters)
         context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(root.toString(2).toByteArray(Charsets.UTF_8)) } ?: throw IOException("Yedek dosyası yazılamadı.")
@@ -266,10 +272,13 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
                 val m = mangas.getJSONObject(i)
                 val id = validId(m.getString("id")); ids += id
                 val source = m.getString("source")
-                require(source in listOf("local", "mangadex"))
+                require(source in listOf("local", "mangadex", "mangabats", "mangabuddy"))
+                val sourceUrl = m.optString("sourceUrl")
+                if (source in webSources) require(webSources.getValue(source).validUrl(sourceUrl))
                 val old = dao.manga(id)
-                val cover = m.optString("cover").takeIf { it.startsWith("https://uploads.mangadex.org/covers/") }.orEmpty()
-                dao.putManga((old ?: Manga(id, m.getString("title"), m.optString("description"), cover, source)).copy(inLibrary = true, readingStatus = m.optString("status", "Okuyorum"), lastChapterId = validId(m.optString("lastChapter").ifBlank { "none" }).takeUnless { it == "none" }.orEmpty(), lastReadAt = m.optLong("lastRead")))
+                require(old == null || old.source == source)
+                val cover = m.optString("cover").takeIf { it.startsWith("https://uploads.mangadex.org/covers/") || (source in webSources && it.startsWith("https://")) }.orEmpty()
+                dao.putManga((old ?: Manga(id, m.getString("title"), m.optString("description"), cover, source)).copy(inLibrary = true, readingStatus = m.optString("status", "Okuyorum"), lastChapterId = validId(m.optString("lastChapter").ifBlank { "none" }).takeUnless { it == "none" }.orEmpty(), lastReadAt = m.optLong("lastRead"), sourceUrl = sourceUrl))
             }
             for (i in 0 until chapters.length()) {
                 val c = chapters.getJSONObject(i)
@@ -277,7 +286,11 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
                 require(mangaId in ids)
                 val old = dao.chapter(id)
                 val language = c.optString("language", "en")
-                dao.putChapter((old ?: Chapter(id, mangaId, c.getString("title"), c.optString("number"), language, c.optDouble("order", 0.0), downloadState = if (language == "local") "missing" else "none")).copy(progressIndex = c.optInt("index").coerceAtLeast(0), progressOffset = c.optInt("offset").coerceAtLeast(0), isRead = c.optBoolean("read")))
+                val sourceUrl = c.optString("sourceUrl")
+                val parent = dao.manga(mangaId) ?: error("Seri bulunamadı.")
+                if (parent.source in webSources) require(webSources.getValue(parent.source).validUrl(sourceUrl, true) && sourceUrl.startsWith(parent.sourceUrl + "/"))
+                require(old == null || old.mangaId == mangaId)
+                dao.putChapter((old ?: Chapter(id, mangaId, c.getString("title"), c.optString("number"), language, c.optDouble("order", 0.0), downloadState = if (language == "local") "missing" else "none")).copy(progressIndex = c.optInt("index").coerceAtLeast(0), progressOffset = c.optInt("offset").coerceAtLeast(0), isRead = c.optBoolean("read"), sourceUrl = sourceUrl))
             }
         }
     }

@@ -204,7 +204,7 @@ private fun ReaderPage(repo: ReaderRepository, chapter: Chapter, part: ReaderPar
     LaunchedEffect(original, part, retry, resolved) {
         error = null
         try {
-            val source = if (retry > 0 && original.uri.startsWith("https://")) repo.api.pages(chapter.id).getOrElse(part.sourceIndex) { original } else original
+            val source = if (retry > 0 && original.uri.startsWith("https://")) repo.remotePages(chapter).getOrElse(part.sourceIndex) { original } else original
             val local = resolved ?: repo.pageFile(chapter, part.sourceIndex, source)
             onResolved(local)
             if (part.height > 0) loaded = repo.pageSlice(local, part)

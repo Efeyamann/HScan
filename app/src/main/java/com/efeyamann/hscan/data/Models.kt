@@ -17,6 +17,7 @@ data class Manga(
     val lastChapterId: String = "",
     val lastReadAt: Long = 0L,
     val addedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "''") val sourceUrl: String = "",
 )
 
 @Entity(tableName = "chapter", indices = [Index("mangaId")])
@@ -35,17 +36,18 @@ data class Chapter(
     val progressOffset: Int = 0,
     val isRead: Boolean = false,
     val error: String = "",
+    @ColumnInfo(defaultValue = "''") val sourceUrl: String = "",
 )
 
-data class Page(val uri: String, val width: Int = 0, val height: Int = 0)
+data class Page(val uri: String, val width: Int = 0, val height: Int = 0, val referer: String = "")
 fun List<Page>.toJson(): String = JSONArray().apply {
-    forEach { put(JSONObject().put("uri", it.uri).put("width", it.width).put("height", it.height)) }
+    forEach { put(JSONObject().put("uri", it.uri).put("width", it.width).put("height", it.height).put("referer", it.referer)) }
 }.toString()
 fun pagesFromJson(json: String): List<Page> {
     val array = JSONArray(json)
     return (0 until array.length()).map { index ->
         val p = array.getJSONObject(index)
-        Page(p.getString("uri"), p.optInt("width"), p.optInt("height"))
+        Page(p.getString("uri"), p.optInt("width"), p.optInt("height"), p.optString("referer"))
     }
 }
 
@@ -76,5 +78,12 @@ interface ReaderDao {
     suspend fun download(id: String, state: String, count: Int, total: Int, error: String = "")
 }
 
-@Database(entities = [Manga::class, Chapter::class], version = 1, exportSchema = true)
+@Database(entities = [Manga::class, Chapter::class], version = 2, exportSchema = true)
 abstract class ReaderDatabase : RoomDatabase() { abstract fun dao(): ReaderDao }
+
+val SOURCE_MIGRATION = object : androidx.room.migration.Migration(1, 2) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE manga ADD COLUMN sourceUrl TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE chapter ADD COLUMN sourceUrl TEXT NOT NULL DEFAULT ''")
+    }
+}

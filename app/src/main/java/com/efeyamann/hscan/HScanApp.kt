@@ -17,7 +17,7 @@ class HScanApp : Application(), SingletonImageLoader.Factory {
         if (!BuildConfig.DEBUG) updates.schedule()
     }
     val repository by lazy {
-        ReaderRepository(this, Room.databaseBuilder(this, ReaderDatabase::class.java, "hscan.db").build())
+        ReaderRepository(this, Room.databaseBuilder(this, ReaderDatabase::class.java, "hscan.db").addMigrations(com.efeyamann.hscan.data.SOURCE_MIGRATION).build())
     }
     override fun newImageLoader(context: android.content.Context): ImageLoader = ImageLoader.Builder(context)
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.15).build() }
