@@ -108,6 +108,10 @@ class ReaderIntegrationTest {
         val sliceBounds = repo.dimensions(slice)
         assertEquals(600, sliceBounds.width)
         assertEquals(2048, sliceBounds.height)
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("image-0-0-ready").fetchSemanticsNodes().isNotEmpty() }
+        val rendered = compose.onRoot().captureToImage().asAndroidBitmap()
+        val pixel = rendered.getPixel((rendered.width * 0.9).toInt(), (rendered.height * 0.4).toInt())
+        assertTrue("Long page must be visible, not a black GPU texture", Color.red(pixel) > 220 && Color.green(pixel) > 220 && Color.blue(pixel) > 220)
         screenshot("reader-long-page.png")
         compose.onNodeWithTag("reader-list").performScrollToIndex(6)
         val id = runBlocking(Dispatchers.IO) { repo.dao.chaptersOnce(manga.id).single().id }

@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
+import me.saket.telephoto.zoomable.rememberZoomableImageState
 import java.io.File
 import coil3.request.ImageRequest
 import coil3.size.Scale
@@ -190,6 +191,7 @@ private fun ReaderPage(repo: ReaderRepository, chapter: Chapter, part: ReaderPar
     var loaded by remember(part, original) { mutableStateOf<File?>(null) }
     var error by remember(original) { mutableStateOf<String?>(null) }
     var retry by remember(original) { mutableIntStateOf(0) }
+    val imageState = rememberZoomableImageState()
     LaunchedEffect(original, part, retry, resolved) {
         error = null
         try {
@@ -207,7 +209,7 @@ private fun ReaderPage(repo: ReaderRepository, chapter: Chapter, part: ReaderPar
         Box(Modifier.fillMaxWidth().height(height), contentAlignment = Alignment.Center) {
             val file = loaded
             when {
-                file != null -> ZoomableAsyncImage(model = ImageRequest.Builder(LocalContext.current).data(file).size(2048, 2048).scale(Scale.FIT).build(), contentDescription = "Sayfa ${part.sourceIndex + 1}, parça ${part.partIndex + 1}", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillWidth, alignment = Alignment.TopCenter, onClick = { onTap() })
+                file != null -> ZoomableAsyncImage(model = ImageRequest.Builder(LocalContext.current).data(file).size(2048, 2048).scale(Scale.FIT).build(), state = imageState, contentDescription = "Sayfa ${part.sourceIndex + 1}, parça ${part.partIndex + 1}", modifier = Modifier.fillMaxSize().testTag(if (imageState.isImageDisplayedInFullQuality) "image-${part.sourceIndex}-${part.partIndex}-ready" else "image-loading"), contentScale = ContentScale.FillWidth, alignment = Alignment.TopCenter, onClick = { onTap() })
                 error != null -> Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text(error!!); TextButton(onClick = { retry++ }) { Icon(Icons.Outlined.Refresh, null); Text("Tekrar dene") } }
                 else -> Column(Modifier.clickable(onClick = onTap).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) { CircularProgressIndicator(); Text("Sayfa ${part.sourceIndex + 1}") }
             }
