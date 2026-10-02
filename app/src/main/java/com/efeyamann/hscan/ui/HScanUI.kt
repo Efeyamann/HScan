@@ -119,6 +119,7 @@ fun HScanUI(model: AppModel = viewModel()) {
                     Text("Yedek, kütüphaneni ve okuma ilerlemeni içerir. Görseller dahil değildir. Yerel arşivleri ayrıca sakla.", style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = { settings = false; backupWriter.launch("hscan-yedek.json") }, modifier = Modifier.fillMaxWidth()) { Text("Yedek oluştur") }
                     OutlinedButton(onClick = { settings = false; backupReader.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth()) { Text("Yedeği geri yükle") }
+                    TextButton(onClick = { settings = false; model.action { repo.clearPageCache(); model.notice("Geçici sayfalar temizlendi. İndirilenler korundu.") } }, modifier = Modifier.fillMaxWidth()) { Text("Geçici sayfaları temizle") }
                     Text("HScan ${BuildConfig.VERSION_NAME} · ${BuildConfig.VERSION_CODE}\nMangaDex kaynaklı içerik · Türkçe arayüz", style = MaterialTheme.typography.bodySmall)
                 }
             },

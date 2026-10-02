@@ -124,6 +124,13 @@ class ReaderIntegrationTest {
         assertTrue(pages.isNotEmpty())
         val file = repo.pageFile(chapter, 0, pages.first())
         assertTrue(file.width > 0 && file.height > 0)
+        repo.performDownload(chapter) { false }
+        val downloaded = repo.dao.chapter(chapter.id)!!
+        assertEquals("ready", downloaded.downloadState)
+        val offlinePages = repo.readerPages(downloaded)
+        assertEquals(pages.size, offlinePages.size)
+        assertTrue(offlinePages.all { !it.uri.startsWith("https://") && File(it.uri).isFile })
+        assertTrue(repo.pageFile(downloaded, 0, offlinePages.first()).width > 0)
     }
 
     private fun screenshot(name: String) {

@@ -167,7 +167,8 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
             val chapterId = "local-chapter-$hash"
             val pages = mutableListOf<Page>()
             ZipFile(tmp).use { zip ->
-                val entries = zip.entries().asSequence().filter { !it.isDirectory }.toList()
+                val entries = zip.entries().asSequence().filter { !it.isDirectory }.take(10001).toList()
+                require(entries.size <= 10000) { "Arşivde çok fazla dosya var." }
                 entries.forEach { ArchiveRules.safeDestination(staging, it.name) }
                 val images = entries.filter { ArchiveRules.isImage(it.name) }.sortedWith { a, b -> ArchiveRules.naturalOrder.compare(a.name, b.name) }
                 require(images.size in 1..ArchiveRules.MAX_PAGES) { "Arşivde okunabilir görsel yok veya sayfa sayısı çok fazla." }
@@ -214,6 +215,10 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
         }
         root.put("manga", manga).put("chapters", chapters)
         context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(root.toString(2).toByteArray(Charsets.UTF_8)) } ?: throw IOException("Yedek dosyası yazılamadı.")
+    }
+
+    suspend fun clearPageCache() = withContext(Dispatchers.IO) {
+        File(context.cacheDir, "chapters").deleteRecursively()
     }
 
     suspend fun restoreBackup(uri: Uri) = withContext(Dispatchers.IO) {

@@ -8,6 +8,7 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import com.efeyamann.hscan.data.ReaderDatabase
 import com.efeyamann.hscan.data.ReaderRepository
+import okio.Path.Companion.toOkioPath
 
 class HScanApp : Application(), SingletonImageLoader.Factory {
     val repository by lazy {
@@ -15,6 +16,6 @@ class HScanApp : Application(), SingletonImageLoader.Factory {
     }
     override fun newImageLoader(context: android.content.Context): ImageLoader = ImageLoader.Builder(context)
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.15).build() }
-        .diskCache { DiskCache.Builder().directory(java.io.File(cacheDir, "coil")).maxSizeBytes(128L * 1024 * 1024).build() }
+        .diskCache { DiskCache.Builder().directory(java.io.File(cacheDir, "coil").toOkioPath()).maxSizeBytes(128L * 1024 * 1024).build() }
         .build()
 }
