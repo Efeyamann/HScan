@@ -32,6 +32,15 @@ class ArchiveRulesTest {
         val pages = listOf(Page("https://example.com/page.jpg", 800, 16000), Page("/local/2.img", 600, 900))
         assertEquals(pages, pagesFromJson(pages.toJson()))
     }
+    @Test fun longImagePartsCoverEveryPixelWithoutOversizedTextures() {
+        val parts = readerParts(0, Page("/test.png", 600, 12000))
+        assertEquals(6, parts.size)
+        assertEquals(12000, parts.sumOf { it.height })
+        assertTrue(parts.all { it.height <= 2048 })
+        parts.zipWithNext().forEach { (a, b) -> assertEquals(a.top + a.height, b.top) }
+        assertTrue(parts.last().last)
+        assertEquals(1, readerParts(1, Page("/normal.jpg", 900, 1256)).size)
+    }
     @Test fun readsMangaDexCoverRelationshipAndLocalizedTitle() {
         val data = JSONObject("""{"id":"abc","attributes":{"title":{"ja":"日本語","en":"English","tr":"Türkçe"},"description":{"en":"Description"}},"relationships":[{"type":"cover_art","attributes":{"fileName":"cover.png"}}]}""")
         val manga = MangaDex.parseManga(data)

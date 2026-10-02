@@ -2,6 +2,9 @@ package com.efeyamann.hscan.data
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.graphics.BitmapRegionDecoder
+import android.graphics.Rect
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.room.withTransaction
@@ -96,6 +99,31 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
         BitmapFactory.decodeFile(file.absolutePath, options)
         if (options.outWidth <= 0 || options.outHeight <= 0) throw IOException("Bu görsel okunamıyor.")
         return Page(file.absolutePath, options.outWidth, options.outHeight)
+    }
+
+    @Suppress("DEPRECATION")
+    suspend fun pageSlice(page: Page, part: ReaderPart): File = withContext(Dispatchers.IO) {
+        val original = File(page.uri)
+        if (part.top == 0 && part.height == page.height) return@withContext original
+        val identity = "${original.absolutePath}:${original.length()}:${original.lastModified()}"
+        val hash = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray()).joinToString("") { "%02x".format(it) }.take(32)
+        val folder = File(context.cacheDir, "page-slices/$hash").apply { mkdirs() }
+        val output = File(folder, "${part.top}-${part.height}.jpg")
+        locks.getOrPut(output.absolutePath) { Mutex() }.withLock {
+          if (output.isFile) return@withLock output
+          val decoder = BitmapRegionDecoder.newInstance(original.absolutePath, false) ?: throw IOException("Uzun görsel açılamadı.")
+          try {
+            val bitmap = decoder.decodeRegion(Rect(0, part.top, page.width, part.top + part.height), BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }) ?: throw IOException("Görsel parçası açılamadı.")
+            try {
+                val temp = File(folder, output.name + ".part")
+                try {
+                    temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 96, it) }
+                    check(temp.renameTo(output)) { "Görsel parçası kaydedilemedi." }
+                } finally { temp.delete() }
+            } finally { bitmap.recycle() }
+          } finally { decoder.recycle() }
+          output
+        }
     }
 
     fun saveProgress(chapter: Chapter, index: Int, offset: Int, read: Boolean) {
@@ -219,6 +247,7 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
 
     suspend fun clearPageCache() = withContext(Dispatchers.IO) {
         File(context.cacheDir, "chapters").deleteRecursively()
+        File(context.cacheDir, "page-slices").deleteRecursively()
     }
 
     suspend fun restoreBackup(uri: Uri) = withContext(Dispatchers.IO) {

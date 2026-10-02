@@ -29,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Scale
+import androidx.compose.ui.platform.LocalContext
 import com.efeyamann.hscan.AppModel
 import com.efeyamann.hscan.BuildConfig
 import com.efeyamann.hscan.data.*
@@ -316,7 +319,7 @@ private fun Cover(manga: Manga, modifier: Modifier) {
     Surface(modifier, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Box(contentAlignment = Alignment.Center) {
             Text(manga.title.take(1), style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            if (manga.cover.isNotBlank()) AsyncImage(model = if (manga.cover.startsWith("https://")) manga.cover else File(manga.cover), contentDescription = "${manga.title} kapağı", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            if (manga.cover.isNotBlank()) AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(if (manga.cover.startsWith("https://")) manga.cover else File(manga.cover)).size(512, 768).scale(Scale.FIT).build(), contentDescription = "${manga.title} kapağı", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
     }
 }

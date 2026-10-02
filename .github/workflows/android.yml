@@ -107,9 +107,9 @@ jobs:
             adb install $(find test-apks -name app-debug.apk)
             adb install $(find test-apks -name app-debug-androidTest.apk)
             adb shell am instrument -w -r com.efeyamann.hscan.test/androidx.test.runner.AndroidJUnitRunner | tee device-tests.txt
+            adb pull /sdcard/Android/data/com.efeyamann.hscan/files/screenshots screenshots || true
             ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' device-tests.txt
             grep -E 'OK \([0-9]+ tests?\)' device-tests.txt
-            adb pull /sdcard/Android/data/com.efeyamann.hscan/files/screenshots screenshots
       - uses: actions/upload-artifact@v4
         if: always()
         with:

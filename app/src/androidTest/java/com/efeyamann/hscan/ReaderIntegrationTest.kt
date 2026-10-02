@@ -86,7 +86,9 @@ class ReaderIntegrationTest {
         val archive = File(repo.context.cacheDir, "broken.zip")
         ZipOutputStream(archive.outputStream()).use { zip -> zip.putNextEntry(ZipEntry("../escape.jpg")); zip.write(byteArrayOf(1, 2, 3)); zip.closeEntry() }
         var rejected = false
-        try { repo.importArchive(Uri.fromFile(archive)) } catch (_: IllegalArgumentException) { rejected = true }
+        try { repo.importArchive(Uri.fromFile(archive)) }
+        catch (_: IllegalArgumentException) { rejected = true }
+        catch (_: java.util.zip.ZipException) { rejected = true }
         assertTrue(rejected)
         assertTrue(repo.dao.allManga().isEmpty())
         assertFalse(File(repo.context.filesDir, "escape.jpg").exists())
@@ -100,7 +102,14 @@ class ReaderIntegrationTest {
         compose.onNodeWithText("Okumaya başla").performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithTag("reader-list").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Kontrolleri gizle").performClick()
-        compose.onNodeWithTag("reader-list").performScrollToIndex(1)
+        val longChapter = runBlocking(Dispatchers.IO) { repo.dao.chaptersOnce(manga.id).single() }
+        val longPage = runBlocking(Dispatchers.IO) { repo.readerPages(longChapter).first() }
+        val slice = runBlocking(Dispatchers.IO) { repo.pageSlice(longPage, readerParts(0, longPage).first()) }
+        val sliceBounds = repo.dimensions(slice)
+        assertEquals(600, sliceBounds.width)
+        assertEquals(2048, sliceBounds.height)
+        screenshot("reader-long-page.png")
+        compose.onNodeWithTag("reader-list").performScrollToIndex(6)
         val id = runBlocking(Dispatchers.IO) { repo.dao.chaptersOnce(manga.id).single().id }
         compose.waitUntil(15000) { runBlocking(Dispatchers.IO) { repo.dao.chapter(id)?.progressIndex == 1 } }
         compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
