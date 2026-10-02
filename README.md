@@ -1,6 +1,6 @@
 # HScan
 
-Kişisel Android manga ve manhwa okuyucusu. MangaDex, yerel CBZ/ZIP dosyaları ve çevrimdışı bölümler. Türkçe arayüz, koyu tema, dikey okuma ve yakınlaştırma.
+Kişisel Android manga ve manhwa okuyucusu. MangaDex, MangaBats, MangaBuddy, yerel CBZ/ZIP dosyaları ve çevrimdışı bölümler. Türkçe arayüz, koyu tema, dikey okuma ve yakınlaştırma.
 
 ## Telefona kurma
 
@@ -8,7 +8,7 @@ Kişisel Android manga ve manhwa okuyucusu. MangaDex, yerel CBZ/ZIP dosyaları v
 
 ## Kullanım
 
-- **Kaynaklar:** MangaDex'te ara, bölüm dilini seç, seriyi kütüphaneye ekle.
+- **Kaynaklar:** Üç sitede aynı anda ara; karttaki küçük etiket kaynağı gösterir. Aynı seri farklı kaynaklarda ayrı kartlarda görünür. Bir kaynak erişilemezse diğerlerinin sonuçları gösterilir. Bölüm dili filtresi MangaDex için geçerlidir; MangaBats ve MangaBuddy İngilizce içerik sunar.
 - **Kütüphane:** Serileri ara, okuma durumunu seç. Son okuduğun seri kütüphanede olmasa da ana ekrandaki **Devam et** düğmesiyle bölüm ve sayfa konumuna dön.
 - **Arama:** Seri detayından geri dönünce arama metni, dil, sonuçlar ve kaydırma konumu korunur.
 - **Okuyucu:** Yukarıdan aşağıya kaydır. Çift dokun veya iki parmağınla yakınlaştır. Tek dokun kontrolleri gizler/açar.
@@ -27,8 +27,8 @@ Yerelde derlemek isteyenler için JDK 17 ve Android SDK gerekir: `./gradlew test
 
 ## Veri
 
-Kütüphane ve ilerleme cihazdaki Room veritabanındadır. İndirilenler uygulamanın özel depolamasında, çevrimiçi sayfalar temizlenebilir önbellektedir. Sunucu, hesap veya analiz servisi yoktur. MangaDex API'si ve görsel sunucularına içerik için bağlanılır.
+Kütüphane ve ilerleme cihazdaki Room veritabanındadır. İndirilenler uygulamanın özel depolamasında, çevrimiçi sayfalar temizlenebilir önbellektedir. Sunucu, hesap veya analiz servisi yoktur. MangaDex API'sine, MangaBats ve MangaBuddy'nin herkese açık sayfalarına/bölüm listelerine ve görsel sunucularına içerik için bağlanılır. Kaynak bağlantıları yedekte korunur. Veritabanı güncellemesi mevcut kütüphaneyi ve ilerlemeyi korur.
 
 ## Kontroller
 
-CI: JVM birim testleri, Android lint, APK derlemesi ve Android 35 emülatöründe yerel arşiv / veritabanı / okuyucu testleri. Gerçek telefonda okuma akıcılığı ve kurulum ayrıca kontrol edilir.
+CI: JVM birim testleri, Android lint, APK derlemesi ve Android 35 emülatöründe yerel arşiv / veritabanı / okuyucu testleri; eski veritabanı geçişi, iki web kaynağında gerçek arama, sayfa yükleme, bölüm indirme ve kaynak bağlantılı yedek testi. Gerçek telefonda okuma akıcılığı ve kurulum ayrıca kontrol edilir.
