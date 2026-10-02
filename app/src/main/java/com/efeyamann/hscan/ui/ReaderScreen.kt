@@ -146,7 +146,7 @@ private fun ChapterReader(id: String, repo: ReaderRepository, gap: Boolean, onBa
             }
             if (pages.isNotEmpty()) Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)) {
                 Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp)) {
-                    val index = list.firstVisibleItemIndex.coerceAtMost(pages.lastIndex)
+                    val index by remember(pages.size) { derivedStateOf { list.firstVisibleItemIndex.coerceAtMost(pages.lastIndex) } }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("${index + 1} / ${pages.size}", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                         TextButton(onClick = { scope.launch { list.scrollToItem(0) } }) { Text("Başa dön") }
@@ -167,7 +167,10 @@ private fun ReaderPage(repo: ReaderRepository, chapter: Chapter, index: Int, ori
     var retry by remember(original) { mutableIntStateOf(0) }
     LaunchedEffect(original, retry) {
         error = null
-        try { loaded = repo.pageFile(chapter, index, original) }
+        try {
+            val source = if (retry > 0 && original.uri.startsWith("https://")) repo.api.pages(chapter.id).getOrElse(index) { original } else original
+            loaded = repo.pageFile(chapter, index, source)
+        }
         catch (cancel: CancellationException) { throw cancel }
         catch (e: Exception) { error = e.message ?: "Sayfa açılamadı." }
     }

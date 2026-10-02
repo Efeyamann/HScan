@@ -96,6 +96,7 @@ class ReaderIntegrationTest {
         val manga = runBlocking(Dispatchers.IO) { repo.importArchive(Uri.fromFile(archive(long = true))) }
         compose.waitUntil(15000) { compose.onAllNodesWithText(manga.title).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(manga.title).performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("Okumaya başla").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Okumaya başla").performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithTag("reader-list").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Kontrolleri gizle").performClick()

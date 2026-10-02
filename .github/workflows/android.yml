@@ -18,7 +18,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+      - uses: actions/cache/restore@v4
+        id: gradle-cache
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
       - name: Restore private signing key
         env:
           KEYSTORE: ${{ secrets.HSCAN_KEYSTORE_BASE64 }}
@@ -54,11 +60,19 @@ jobs:
           name: check-reports
           path: |
             app/build/reports/
+            app/build/test-results/
             app/schemas/
           retention-days: 7
       - name: Remove signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/hscan.p12"
+      - uses: actions/cache/save@v4
+        if: always() && steps.gradle-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
   device-tests:
     runs-on: ubuntu-24.04
     needs: build
@@ -88,6 +102,8 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
+            adb shell wm size 1080x1920
+            adb shell wm density 480
             adb install $(find test-apks -name app-debug.apk)
             adb install $(find test-apks -name app-debug-androidTest.apk)
             adb shell am instrument -w -r com.efeyamann.hscan.test/androidx.test.runner.AndroidJUnitRunner | tee device-tests.txt
