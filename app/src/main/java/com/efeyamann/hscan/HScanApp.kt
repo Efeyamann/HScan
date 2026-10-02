@@ -11,6 +11,11 @@ import com.efeyamann.hscan.data.ReaderRepository
 import okio.Path.Companion.toOkioPath
 
 class HScanApp : Application(), SingletonImageLoader.Factory {
+    val updates by lazy { com.efeyamann.hscan.update.UpdateManager(this) }
+    override fun onCreate() {
+        super.onCreate()
+        if (!BuildConfig.DEBUG) updates.schedule()
+    }
     val repository by lazy {
         ReaderRepository(this, Room.databaseBuilder(this, ReaderDatabase::class.java, "hscan.db").build())
     }

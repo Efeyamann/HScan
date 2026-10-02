@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
 
 class AppModel(application: Application) : AndroidViewModel(application) {
     val repository: ReaderRepository = (application as HScanApp).repository
+    val updates = (application as HScanApp).updates
     private val notices = Channel<String>(Channel.BUFFERED)
     val messages = notices.receiveAsFlow()
     var importing by mutableStateOf(false)

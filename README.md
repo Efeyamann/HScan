@@ -14,6 +14,7 @@ Kişisel Android manga ve manhwa okuyucusu. MangaDex, yerel CBZ/ZIP dosyaları v
 - **Okuyucu:** Yukarıdan aşağıya kaydır. Çift dokun veya iki parmağınla yakınlaştır. Tek dokun kontrolleri gizler/açar.
 - **İndirilenler:** Bölüm listesinden indirme başlat. Tamamlanan bölümleri internetsiz oku.
 - **+ düğmesi:** Görsel içeren CBZ/ZIP dosyası içe aktar. Dosya adları doğal sırayla okunur (1, 2, 10).
+- **Güncellemeler:** GitHub Releases üzerinden açılışta ve yaklaşık 6 saatte bir yeni sürüm kontrol edilir. APK Wi-Fi ve mobil veride otomatik iner; Ayarlar’dan otomatik indirmeyi kapatabilir veya yalnız Wi-Fi seçebilirsin. Bildirim izni verirsen indirme bitince haber gelir. Bildirimden ya da uygulamadaki **Güncellemeyi kur** düğmesinden Android’in kurulum onayına geçilir. İlk seferde HScan’e uygulama yükleme izni gerekir. APK boyutu, SHA-256 özeti, paket adı, sürümü ve mevcut uygulamayla aynı imza doğrulanır. Arka plan kontrolünün zamanı Android’in pil/ağ koşullarına bağlıdır.
 - **Ayarlar:** Sayfa aralığı ve JSON yedeği. Yedek kapak/görselleri içermez. Yerel arşivleri ayrıca sakla; aynı arşivi tekrar içe aktarmak ilerlemeyi korur.
 
 MangaDex'teki başka sitelere yönlendiren bölümler okuyucuda gösterilmez. Bir bölüm numarası/dili için tek çeviri gösterilir. İngilizce ve Türkçe filtreleri veya tüm diller kullanılabilir.

@@ -52,6 +52,7 @@ fun HScanUI(model: AppModel = viewModel()) {
     MaterialTheme(colorScheme = ReaderColors) {
         val screenStates = rememberSaveableStateHolder()
         val repo = model.repository
+        UpdateNotificationPrompt(model.updates)
         var tab by rememberSaveable { mutableIntStateOf(0) }
         var mangaId by rememberSaveable { mutableStateOf<String?>(null) }
         var chapterId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -103,6 +104,7 @@ fun HScanUI(model: AppModel = viewModel()) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text("Arşiv içe aktarılıyor…", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
                     }
+                    UpdateBanner(model.updates)
                     val selected = mangaId
                     screenStates.SaveableStateProvider(selected?.let { "detail:$it" } ?: "tab:$tab") {
                         if (selected != null) DetailScreen(selected, model, onRead = { chapterId = it })
@@ -119,7 +121,9 @@ fun HScanUI(model: AppModel = viewModel()) {
             onDismissRequest = { settings = false },
             title = { Text("Ayarlar") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    UpdateSettings(model.updates)
+                    HorizontalDivider()
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Sayfalar arasında boşluk", Modifier.weight(1f))
                         Switch(checked = gap, onCheckedChange = { gap = it; repo.preferences.edit().putBoolean("pageGap", it).apply() })
