@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.efeyamann.hscan.BuildConfig
 import com.efeyamann.hscan.update.UpdateInstallActivity
 import com.efeyamann.hscan.update.UpdateManager
@@ -54,6 +55,11 @@ fun UpdateSettings(updates: UpdateManager) {
     var automatic by remember { mutableStateOf(updates.autoDownload) }
     var onlyWifi by remember { mutableStateOf(updates.wifiOnly) }
     var notifications by remember { mutableStateOf(updates.notificationsEnabled()) }
+    LifecycleResumeEffect(updates) {
+        notifications = updates.notificationsEnabled()
+        if (notifications) updates.notifyUpdate()
+        onPauseOrDispose { }
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         notifications = updates.notificationsEnabled()
         if (notifications) updates.notifyUpdate()
