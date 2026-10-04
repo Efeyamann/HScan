@@ -44,7 +44,7 @@ class ChapterRangeIntegrationTest {
         compose.onNodeWithText("Bölüm 3 · EN").performClick()
         compose.onNodeWithText("3 bölüm seçildi · 2 bölüm indirilecek").assertExists()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val image = compose.onRoot().captureToImage().asAndroidBitmap()
+        val image = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
         File(context.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
             .resolve("chapter-range.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         compose.onNodeWithTag("download-range-confirm").performClick()
