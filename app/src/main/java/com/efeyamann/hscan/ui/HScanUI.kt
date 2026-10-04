@@ -213,6 +213,8 @@ private fun DetailScreen(id: String, model: AppModel, onRead: (String) -> Unit) 
     var error by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
     var expand by rememberSaveable(id) { mutableStateOf(false) }
+    var rangeDialog by rememberSaveable(id) { mutableStateOf(false) }
+    var queueing by remember { mutableStateOf(false) }
     LaunchedEffect(manga?.id, language, retry) {
         val m = manga ?: return@LaunchedEffect
         if (m.source == "local") return@LaunchedEffect
@@ -224,6 +226,20 @@ private fun DetailScreen(id: String, model: AppModel, onRead: (String) -> Unit) 
     }
     val m = manga ?: return
     val visible = chapters.filter { m.source != "mangadex" || language == "all" || it.language == language }
+    if (rangeDialog && visible.isNotEmpty()) ChapterRangeDialog(
+        chapters = visible,
+        onDismiss = { rangeDialog = false },
+        onDownload = { selected ->
+            rangeDialog = false
+            queueing = true
+            model.action {
+                try {
+                    val count = repo.enqueueChapters(selected)
+                    model.notice(if (count > 0) "$count bölüm indirme kuyruğuna eklendi." else "Bu aralıktaki bölümler zaten indirilmiş veya kuyrukta.")
+                } finally { queueing = false }
+            }
+        },
+    )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -251,6 +267,15 @@ private fun DetailScreen(id: String, model: AppModel, onRead: (String) -> Unit) 
                 Text("Bölümler · ${visible.size}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 if (m.source != "local") IconButton(onClick = { retry++ }, enabled = !loading) { Icon(Icons.Outlined.Refresh, "Bölümleri yenile") }
             }
+            if (m.source != "local" && visible.isNotEmpty()) OutlinedButton(
+                onClick = { rangeDialog = true },
+                enabled = !loading && !queueing,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            ) {
+                Icon(Icons.Outlined.Download, null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (queueing) "Kuyruğa ekleniyor…" else "Aralık indir")
+            }
             val start = visible.firstOrNull { it.id == m.lastChapterId } ?: visible.firstOrNull { !it.isRead } ?: visible.firstOrNull()
             if (start != null) Button(onClick = { onRead(start.id) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Text(if (m.lastChapterId.isNotEmpty()) "Kaldığın yerden devam et" else "Okumaya başla")
@@ -258,7 +283,7 @@ private fun DetailScreen(id: String, model: AppModel, onRead: (String) -> Unit) 
             if (visible.isEmpty() && !loading && error == null) Text("Bu dilde okunabilir bölüm bulunamadı. Başka bir dil seçebilirsin.", Modifier.padding(16.dp))
         }
         items(visible, key = { it.id }) { chapter ->
-            ChapterRow(chapter, onRead = { onRead(chapter.id) }, onDownload = if (m.source != "local" && chapter.downloadState !in listOf("ready", "queued", "downloading")) {
+            ChapterRow(chapter, onRead = { onRead(chapter.id) }, onDownload = if (m.source != "local" && chapter.canDownload()) {
                 { model.action { repo.dao.setLibrary(id, true); repo.enqueue(chapter) } }
             } else null)
         }

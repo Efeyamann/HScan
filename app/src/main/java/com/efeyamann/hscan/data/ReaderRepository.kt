@@ -34,6 +34,7 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
         else (webSources[manga.source] ?: throw IOException("Kaynak desteklenmiyor.")).pages(chapter)
     }
     private val locks = ConcurrentHashMap<String, Mutex>()
+    private val enqueueLock = Mutex()
     val preferences = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -143,13 +144,38 @@ class ReaderRepository(val context: Context, val database: ReaderDatabase) {
     }
 
     fun enqueue(chapter: Chapter) {
-        val work = OneTimeWorkRequestBuilder<ChapterDownloadWorker>()
-            .setInputData(workDataOf("chapterId" to chapter.id))
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .addTag("hscan-download")
-            .build()
-        WorkManager.getInstance(context).enqueueUniqueWork("chapter-${chapter.id}", ExistingWorkPolicy.KEEP, work)
-        scope.launch { if (dao.chapter(chapter.id)?.downloadState !in listOf("ready", "downloading")) dao.download(chapter.id, "queued", chapter.downloadCount, chapter.pageCount) }
+        scope.launch { enqueueChapters(listOf(chapter)) }
+    }
+
+    suspend fun enqueueChapters(chapters: List<Chapter>): Int = withContext(Dispatchers.IO) {
+        enqueueLock.withLock {
+            var count = 0
+            for (selected in chapters.distinctBy { it.id }) {
+                val chapter = dao.chapter(selected.id) ?: continue
+                if (!chapter.canDownload()) continue
+                val work = OneTimeWorkRequestBuilder<ChapterDownloadWorker>()
+                    .setInputData(workDataOf("chapterId" to chapter.id))
+                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                    .addTag("hscan-download")
+                    .build()
+                // Persist before scheduling: a fast worker must never be reset to queued.
+                dao.setLibrary(chapter.mangaId, true)
+                dao.download(chapter.id, "queued", chapter.downloadCount, chapter.pageCount)
+                try {
+                    WorkManager.getInstance(context)
+                        .enqueueUniqueWork("chapter-${chapter.id}", ExistingWorkPolicy.KEEP, work)
+                        .result.await()
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (error: Exception) {
+                    dao.download(chapter.id, "error", chapter.downloadCount, chapter.pageCount,
+                        "İndirme kuyruğa alınamadı. Tekrar dene.")
+                    throw error
+                }
+                count++
+            }
+            count
+        }
     }
 
     suspend fun deleteDownload(chapter: Chapter) = withContext(Dispatchers.IO) {
