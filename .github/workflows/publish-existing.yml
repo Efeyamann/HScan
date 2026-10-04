@@ -1,0 +1,48 @@
+name: Publish existing APK
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Android APK workflow run containing the signed APK
+        required: true
+      version:
+        description: Existing APK version code (Android workflow run number)
+        required: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Validate the existing build
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ inputs.run_id }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ && "$VERSION" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID" > run.json
+          jq -e --argjson version "$VERSION" '.path == ".github/workflows/android.yml" and .run_number == $version and .head_branch == "main" and .status == "completed"' run.json
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs" --paginate --jq '.jobs[] | select(.name == "build") | .conclusion' | grep -x success
+          echo "sha=$(jq -r .head_sha run.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: HScan-APK
+          path: apk
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Publish existing signed APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          BUILD_SHA: ${{ steps.build.outputs.sha }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          cp apk/app-release.apk HScan.apk
+          printf '%s\n' 'Android 8 ve üzeri. Bölüm aralığını toplu indirme eklendi. Mevcut uygulamanın üzerine kurulur; kütüphane ve ilerleme korunur.' '' 'Birim testleri ve lint geçti; 14 Android cihaz testinden 13 geçti, yeni aralık testleri başarılı. MangaDex canlı görsel testi 404 nedeniyle başarısız; kullanıcı onayıyla mevcut imzalı APK yayımlandı.' '' "Build: https://github.com/$GH_REPO/actions/runs/$RUN_ID" > release-notes.md
+          gh release create "build-$VERSION" HScan.apk --target "$BUILD_SHA" --title "HScan 0.1 · build $VERSION" --notes-file release-notes.md --latest
