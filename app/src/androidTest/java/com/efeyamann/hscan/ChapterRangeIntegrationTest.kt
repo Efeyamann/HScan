@@ -1,7 +1,7 @@
 package com.efeyamann.hscan
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -32,7 +32,7 @@ class ChapterRangeIntegrationTest {
         )
         var selected: List<Chapter>? = null
         var confirmations = 0
-        compose.setContent { MaterialTheme { ChapterRangeDialog(chapters, {}, { selected = it; confirmations++ }) } }
+        compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { ChapterRangeDialog(chapters, {}, { selected = it; confirmations++ }) } }
         compose.onNodeWithText("5 bölüm seçildi · 3 bölüm indirilecek").assertExists()
         compose.onNodeWithText("Başlangıç:", substring = true).performClick()
         compose.onNodeWithText("Bölüm adı veya numarası ara").performTextInput("2")
@@ -44,7 +44,7 @@ class ChapterRangeIntegrationTest {
         compose.onNodeWithText("Bölüm 3 · EN").performClick()
         compose.onNodeWithText("3 bölüm seçildi · 2 bölüm indirilecek").assertExists()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val image = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
+        val image = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         File(context.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
             .resolve("chapter-range.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         compose.onNodeWithTag("download-range-confirm").performClick()

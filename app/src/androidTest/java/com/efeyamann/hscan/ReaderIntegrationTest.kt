@@ -136,7 +136,18 @@ class ReaderIntegrationTest {
         val manga = found.first()
         repo.cacheManga(manga)
         repo.refreshChapters(manga, "en")
-        val chapter = repo.dao.chaptersOnce(manga.id).first()
+        // A public CDN mirror can lose one chapter while the feed still lists it.
+        // Keep the live read/download assertion, using at most three available fixtures.
+        val chapter = repo.dao.chaptersOnce(manga.id).take(3).firstOrNull { candidate ->
+            val candidatePages = repo.readerPages(candidate)
+            try {
+                repo.pageFile(candidate, 0, candidatePages.first())
+                true
+            } catch (error: java.io.IOException) {
+                if (error.message?.contains("(404)") != true) throw error
+                false
+            }
+        } ?: error("MangaDex sample pages returned 404 for all three chapter fixtures")
         val pages = repo.readerPages(chapter)
         assertTrue(pages.isNotEmpty())
         val file = repo.pageFile(chapter, 0, pages.first())
